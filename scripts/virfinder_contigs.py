@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+"""
+A script that will take as input a FASTA file with contigs and the 
+CSV file produced by virfinder on the same contigs and will
+print the contigs where p-value <= MAX and score >= MINSCORE
+"""
 
 import sys
 import pandas
@@ -21,9 +26,13 @@ def debug(message):
 def printseq(name, seq):
     header = name
     if (opt.annotate_fasta != None):
-        row = filtered.loc[ filtered['name'] == name ]
-        header += ' score={};pvalue={};'.format(row['score'].array[0], row['pvalue'].array[0])
-    print(">{}\n{}".format(header, seq))
+        try:
+            row = filtered.loc[ filtered['name'] == name ]
+            header += ' score={};pvalue={};'.format(row['score'].array[0], row['pvalue'].array[0])
+        except Exception as e:
+            eprint('WARNING!\tIgnoring "-a" and trying to print the sequence')
+    if len(seq) > opt.min_contig_length:      
+        print(">{}\n{}".format(header, seq))
 
 def readfq(fp): # this is a generator function
     last = None # this is a buffer keeping the last unprocessed line
@@ -140,6 +149,8 @@ if __name__ == '__main__':
             eprint("FATAL ERROR:\nUnable to write to output file \"{}\"".format(opt.output))
             exit(7)
 
+    count_seqs = 0
+
     if ( opt.legacy_fasta_parser ):
         # Heng Li's parser
         for name, seq in readfq(fp):
@@ -150,5 +161,9 @@ if __name__ == '__main__':
         # PyFASTA parser
         contigs = Fasta(opt.contigs_fasta)
         for name in filtered['name'].values:
+            count_seqs+=1
             printseq(name, contigs[name])
             #print(">{}\n{}".format(name, contigs[name]))
+
+    if count_seqs != filtered.shape[0]:
+        eprint("ERROR: {} sequences filtered but {} were printed from the FASTA file.".format(filtered.shape[0], count_seqs))
