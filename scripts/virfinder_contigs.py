@@ -110,6 +110,7 @@ if __name__ == '__main__':
                             action='store_true'
                             )
 
+    opt_parser.add_argument('--version', action='version', version='%(prog)s 1.0.2')
     opt_parser.add_argument('-u', '--legacy-fasta-parser', help='Use legacy FASTA parser', action='store_true')
 
     opt = opt_parser.parse_args()
@@ -153,7 +154,7 @@ if __name__ == '__main__':
 
     if ( opt.legacy_fasta_parser ):
         # Heng Li's parser
-        for name, seq in readfq(fp):
+        for name, seq, qual in readfq(fp):
             if name in filtered['name'].values:
                 printseq(name, seq)
                 #print(">{}\n{}".format(name, seq))
