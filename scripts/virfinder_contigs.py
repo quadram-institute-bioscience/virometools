@@ -3,8 +3,7 @@
 import sys
 import pandas
 import argparse
-import pdb
-
+from pdb import set_trace
 
 def eprint(*args, **kwargs):
     """print to STDERR"""
@@ -54,7 +53,7 @@ def readfq(fp): # this is a generator function
 
 if __name__ == '__main__':
 
-    opt_parser = argparse.ArgumentParser(description='Denoise Illumina cross-talk from OTU tables')
+    opt_parser = argparse.ArgumentParser(description='Prints the FASTA records passing filters from a Virfinder CSV file')
 
     opt_parser.add_argument('-f', '--contigs-fasta',
                             help='Contigs/Scaffold file in FASTA format',
@@ -74,6 +73,10 @@ if __name__ == '__main__':
                             type=float,
                             default=0.7)
 
+    opt_parser.add_argument('-l', '--min-contig-length',
+                            help='Minimum size for the contig',
+                            type=int,
+                            default=100)
     opt_parser.add_argument('-v', '--verbose',
                             help='Print extra information',
                             action='store_true')
@@ -82,13 +85,17 @@ if __name__ == '__main__':
                             help='Print debug information',
                             action='store_true')
 
+    opt_parser.add_argument('-o', '--output',
+                            help='Output fasta file',
+                            )
 
+    opt_parser.add_argument('-u', '--legacy-fasta-parser', help='Use legacy FASTA parser', action='store_true')
 
     opt = opt_parser.parse_args()
 
     try:
         data = pandas.read_csv(opt.virfinder_table, sep=',', header=0)
-        filtered = data.loc[data['score'] >= opt.min_score].loc[data['pvalue'] <= opt.max_p_value]
+        filtered = data.loc[data['score'] >= opt.min_score].loc[data['pvalue'] <= opt.max_p_value].loc[data['length'] >= opt.min_contig_length]
     except Exception as e:
         eprint("FATAL ERROR:\nUnable to open table file \"{}\".\n{}".format(opt.virfinder_table, e))
         exit(1)
@@ -98,8 +105,28 @@ if __name__ == '__main__':
     except Exception as e:
         eprint("FATAL ERROR:\n Unable to open contigs file \"{}\". {}".format(opt.contigs_fasta, e))
 
+    if (not opt.legacy_fasta_parser):
+        try:
+            from pyfasta import Fasta
+        except ImportError:
+            eprint("FATAL ERROR: Unable to find pyfasta.\nInstall the module or re-run with --legacy.")
+            exit(4)
     verbose("Virfinder output: {}".format(data.shape[0]))
     verbose("Virfinder selected contigs: {}".format(filtered.shape[0]))
-    for name, seq, qual in readfq(fp):
-        if name in filtered['name'].values:
-            print(">{}\n{}".format(name, seq))
+
+    if opt.output != None:
+        try:
+            sys.stdout = open(opt.output,'wt')
+        except Exception as e:
+            eprint("FATAL ERROR:\nUnable to write to output file \"{}\"".format(opt.output))
+            exit(7)
+
+    if ( opt.legacy_fasta_parser ):
+        for name, seq in readfq(fp):
+            if name in filtered['name'].values:
+                print(">{}\n{}".format(name, seq))
+    else:
+
+        contigs = Fasta(opt.contigs_fasta)
+        for name in filtered['name'].values:
+            print(">{}\n{}".format(name, contigs[name]))
